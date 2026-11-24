@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Firma propia (opcional): si existen estas variables, el APK se firma siempre
+// con la misma llave y se puede ACTUALIZAR sin desinstalar. Ver README.
+def llave = System.getenv('AVISADOR_KEYSTORE')
+
+android {
+    namespace 'pe.glp.avisador'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'pe.glp.avisador'
+        minSdk 26          // Android 8.0 o más nuevo
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        propia {
+            if (llave) {
+                storeFile file(llave)
+                storePassword System.getenv('AVISADOR_KEY_PASS')
+                keyAlias 'avisador'
+                keyPassword System.getenv('AVISADOR_KEY_PASS')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig llave ? signingConfigs.propia : signingConfigs.debug
+        }
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

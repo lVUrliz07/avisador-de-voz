@@ -1,0 +1,62 @@
+# Compila el APK en los servidores de GitHub (gratis) cada vez que se sube un
+# cambio, y lo publica en "Releases" para descargarlo desde el celular.
+name: Compilar APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      # Firma propia (opcional, recomendado): permite actualizar la app sin desinstalarla.
+      - name: Preparar firma
+        env:
+          LLAVE_B64: ${{ secrets.AVISADOR_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$LLAVE_B64" ]; then
+            echo "$LLAVE_B64" | base64 -d > "$RUNNER_TEMP/avisador.jks"
+            echo "AVISADOR_KEYSTORE=$RUNNER_TEMP/avisador.jks" >> "$GITHUB_ENV"
+          else
+            echo "Sin llave propia: se firma con una llave temporal (para actualizar habrá que desinstalar antes)."
+          fi
+
+      - name: Compilar
+        env:
+          AVISADOR_KEY_PASS: ${{ secrets.AVISADOR_KEY_PASS }}
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Renombrar
+        run: cp app/build/outputs/apk/release/app-release.apk AvisadorDeVoz.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AvisadorDeVoz
+          path: AvisadorDeVoz.apk
+
+      - name: Publicar en Releases
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Avisador de voz 1.0.${{ github.run_number }}
+          body: "Descarga **AvisadorDeVoz.apk** desde el celular Android e instálalo. Guía en el README."
+          files: AvisadorDeVoz.apk
