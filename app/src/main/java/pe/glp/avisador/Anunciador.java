@@ -31,7 +31,7 @@ import java.util.Set;
  *
  *   "Cliente Juan Pérez te escribe."
  *   "Familia: Mamá te escribe por WhatsApp."
- *   "Número nuevo 9 8 7, 6 5 4, 3 2 1 te escribe. Puede ser un cliente."
+ *   "Número nuevo 9 8 7, 6 5 4, 3 2 1 te escribe."
  *   "Llamada de cliente Juan Pérez."
  *   "Cliente Juan Pérez sigue esperando respuesta desde hace 10 minutos."
  *
@@ -54,7 +54,7 @@ public final class Anunciador implements TextToSpeech.OnInitListener {
         APPS_MENSAJES.put("com.android.mms", "SMS");
     }
 
-    private static final long AGRUPAR_MS = 2500;     // junta ráfagas de mensajes de la misma persona
+    private static final long AGRUPAR_MS = 4000;     // junta ráfagas de mensajes de la misma persona
     private static final long REPETIR_LLAMADA_MS = 7000;
     private static final int MAX_REPETIR_LLAMADA = 2;
 
@@ -85,9 +85,13 @@ public final class Anunciador implements TextToSpeech.OnInitListener {
     private final Map<String, Pendiente> sinAtender = new HashMap<>();
     /** Llamadas sonando ahora. */
     private final Set<String> llamadasSonando = new HashSet<>();
+    /** Cuándo se dijo por última vez el nombre de cada chat (para no repetirlo). */
+    private final Map<String, Long> nombreDicho = new HashMap<>();
+    private static final long MISMO_CHAT_MS = 3 * 60_000L;
 
     private static final class Pendiente {
         String quien, app, categoria, clave, ultimoTexto, grupo;
+        final List<String> textos = new ArrayList<>();
         int cantidad;
         long desde;
         boolean esLlamadaPerdida;
@@ -135,7 +139,7 @@ public final class Anunciador implements TextToSpeech.OnInitListener {
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build());
-        tts.setSpeechRate(0.95f);
+        aplicarVoz();
         tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
             @Override public void onStart(String id) { }
             @Override public void onDone(String id) { h.post(() -> alTerminarFrase(id)); }
@@ -147,6 +151,76 @@ public final class Anunciador implements TextToSpeech.OnInitListener {
     }
 
     public String problemaVoz() { return problemaVoz; }
+
+    /** Voces en español instaladas en el teléfono, ordenadas: primero las que parecen de hombre. */
+    public List<android.speech.tts.Voice> vocesEspanol() {
+        List<android.speech.tts.Voice> r = new ArrayList<>();
+        if (tts == null || !ttsListo) return r;
+        try {
+            for (android.speech.tts.Voice v : tts.getVoices()) {
+                if (v.getLocale() != null && "es".equals(v.getLocale().getLanguage())) r.add(v);
+            }
+        } catch (Exception ignorado) { }
+        r.sort((a, b) -> {
+            int c = Boolean.compare(!pareceHombre(a), !pareceHombre(b));
+            if (c != 0) return c;
+            c = Boolean.compare(a.isNetworkConnectionRequired(), b.isNetworkConnectionRequired());
+            return c != 0 ? c : a.getName().compareTo(b.getName());
+        });
+        return r;
+    }
+
+    /** Las voces de Google no dicen si son de hombre; estas suelen serlo. */
+    public static boolean pareceHombre(android.speech.tts.Voice v) {
+        String n = v.getName().toLowerCase(Locale.ROOT);
+        if (n.contains("female")) return false;
+        if (n.contains("male")) return true;
+        for (String f : v.getFeatures()) if (f.toLowerCase(Locale.ROOT).contains("male") && !f.toLowerCase(Locale.ROOT).contains("female")) return true;
+        return n.contains("-esd-") || n.contains("-eed-") || n.contains("-esf-") || n.contains("-eef-");
+    }
+
+    /** Aplica la voz elegida (o una de hombre sin internet), el tono y la velocidad. */
+    public void aplicarVoz() {
+        if (tts == null) return;
+        tts.setPitch(ajustes.tonoVoz());
+        tts.setSpeechRate(ajustes.velocidad());
+        String elegida = ajustes.voz();
+        try {
+            for (android.speech.tts.Voice v : tts.getVoices()) {
+                if (!elegida.isEmpty() && v.getName().equals(elegida)) { tts.setVoice(v); return; }
+            }
+            if (elegida.isEmpty()) {
+                for (android.speech.tts.Voice v : vocesEspanol()) {
+                    if (pareceHombre(v) && !v.isNetworkConnectionRequired()) { tts.setVoice(v); return; }
+                }
+            }
+        } catch (Exception ignorado) { /* queda la voz por defecto */ }
+    }
+
+    /** Silenciar al instante (corta lo que está diciendo) o confirmar que volvió. */
+    public void alCambiarSilencio(boolean activo) {
+        h.post(() -> {
+            if (!activo) {
+                cola.clear();
+                if (actual != null) { actual = null; if (tts != null) tts.stop(); }
+                restaurarAudio();
+            } else {
+                hablar("Voz activada.");
+            }
+        });
+    }
+
+    /** Prueba una voz sin guardarla. */
+    public void probarVoz(String nombre) {
+        h.post(() -> {
+            if (tts == null || !ttsListo) return;
+            try {
+                for (android.speech.tts.Voice v : tts.getVoices()) if (v.getName().equals(nombre)) tts.setVoice(v);
+                tts.setPitch(ajustes.tonoVoz());
+            } catch (Exception ignorado) { }
+            hablar("Cliente Juan Pérez dice: me trae un balón mañana a las 9 de la mañana, por favor.");
+        });
+    }
 
     /* ---------- Cola propia de frases: una a la vez, y se puede cortar ---------- */
 
@@ -363,6 +437,7 @@ public final class Anunciador implements TextToSpeech.OnInitListener {
         p.cantidad += nuevos.size();
         p.clave = clave;
         p.ultimoTexto = ultimo.texto;
+        for (Msg m : nuevos) if (m.texto != null && !m.texto.trim().isEmpty()) p.textos.add(m.texto);
     }
 
     public void alQuitar(StatusBarNotification sbn) {
@@ -393,25 +468,36 @@ public final class Anunciador implements TextToSpeech.OnInitListener {
         return !Contactos.FAMILIA.equals(categoria) || ajustes.anunciarFamilia();
     }
 
+    /**
+     * Primera vez:      "Cliente Juan Pérez te escribe: ¿me trae un balón mañana?"
+     * Mismo chat, poco después: "El mismo contacto dice: a las 9 por favor."
+     * El nombre se dice UNA vez; los mensajes seguidos se leen juntos.
+     */
     private String fraseMensaje(Pendiente p) {
+        long ahora = System.currentTimeMillis();
+        Long antes = nombreDicho.get(p.quien);
+        boolean mismoChat = antes != null && ahora - antes < MISMO_CHAT_MS;
+        nombreDicho.put(p.quien, ahora);
+
+        boolean leer = ajustes.leerTexto() && !p.textos.isEmpty() && !Contactos.FAMILIA.equals(p.categoria);
+        String texto = leer ? Lector.juntar(p.textos, 300) : "";
+        if (leer && texto.isEmpty()) leer = false;
+
         StringBuilder f = new StringBuilder();
+        if (mismoChat) {
+            if (leer) f.append(p.grupo != null ? p.grupo + " dice: " : "El mismo contacto dice: ").append(texto);
+            else f.append(p.cantidad > 1 ? p.cantidad + " mensajes más del mismo contacto." : "Otro mensaje del mismo contacto.");
+            return f.toString();
+        }
         if (p.grupo != null && !p.grupo.isEmpty()) {
-            // "En el grupo Familia Pérez, Pedro escribió 2 mensajes."
-            f.append("En el grupo ").append(p.quien).append(", ").append(p.grupo)
-             .append(p.cantidad > 1 ? " escribió " + p.cantidad + " mensajes" : " escribió");
+            f.append("En el grupo ").append(Lector.limpiarNombre(p.quien)).append(", ").append(Lector.limpiarNombre(p.grupo));
+            f.append(leer ? " dice: " : (p.cantidad > 1 ? " escribió " + p.cantidad + " mensajes." : " escribió."));
         } else {
-            f.append(nombreHablado(p.quien, p.categoria));
-            f.append(p.cantidad > 1 ? " te escribió " + p.cantidad + " mensajes" : " te escribe");
+            f.append(nombreHablado(Lector.limpiarNombre(p.quien), p.categoria));
+            if (!"WhatsApp".equals(p.app)) f.append(" por ").append(p.app);
+            f.append(leer ? " dice: " : (p.cantidad > 1 ? " te escribió " + p.cantidad + " mensajes." : " te escribe."));
         }
-        if (!"WhatsApp".equals(p.app)) f.append(" por ").append(p.app);
-        f.append(".");
-        if (Contactos.NUEVO.equals(p.categoria)) f.append(" Puede ser un cliente.");
-        boolean leer = ajustes.leerTexto() && p.ultimoTexto != null
-                && (Contactos.CLIENTE.equals(p.categoria) || Contactos.NUEVO.equals(p.categoria));
-        if (leer) {
-            String t = p.ultimoTexto.length() > 140 ? p.ultimoTexto.substring(0, 140) : p.ultimoTexto;
-            f.append(" Dice: ").append(t);
-        }
+        if (leer) f.append(texto);
         return f.toString();
     }
 
@@ -584,6 +670,7 @@ public final class Anunciador implements TextToSpeech.OnInitListener {
 
     /** Para el botón "Probar voz". */
     public void probar() {
-        hablar("Cliente Juan Pérez te escribe. Así sonará el aviso.");
+        aplicarVoz();
+        hablar("Cliente Juan Pérez dice: me trae un balón mañana a las 9 de la mañana, por favor.");
     }
 }

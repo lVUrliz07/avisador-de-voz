@@ -42,5 +42,16 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+        <!-- Botón rápido en el panel de notificaciones: silenciar / activar la voz -->
+        <service
+            android:name=".BotonRapido"
+            android:exported="true"
+            android:icon="@drawable/ic_voz"
+            android:label="Avisador de voz"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -45,6 +45,8 @@ public class MainActivity extends Activity implements Registro.Oyente {
     private LinearLayout lista;
     private Button botonPausa;
     private Button botonRecordatorio;
+    private Button botonSilencio;
+    private LinearLayout voces;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -62,6 +64,36 @@ public class MainActivity extends Activity implements Registro.Oyente {
         registro.agregarOyente(this);
         pintarEstado();
         pintarLista();
+        pintarVoces();
+    }
+
+    private void pintarVoces() {
+        voces.removeAllViews();
+        List<android.speech.tts.Voice> lista = anunciador.vocesEspanol();
+        if (lista.isEmpty()) {
+            voces.addView(texto("Cargando voces… si no aparecen, toca de nuevo.", 14, GRIS, false));
+            Button r = boton("Ver voces", BLANCO, AZUL);
+            r.setOnClickListener(v -> pintarVoces());
+            voces.addView(r);
+            return;
+        }
+        String elegida = ajustes.voz();
+        int n = 0;
+        for (android.speech.tts.Voice v : lista) {
+            if (n++ >= 12) break;
+            String pais = v.getLocale().getCountry().isEmpty() ? "" : " " + v.getLocale().getCountry();
+            String etiqueta = "Voz " + n + pais + (Anunciador.pareceHombre(v) ? " · hombre" : "")
+                    + (v.isNetworkConnectionRequired() ? " · usa internet" : "");
+            boolean es = v.getName().equals(elegida);
+            Button b = boton((es ? "✓ " : "") + etiqueta, es ? AZUL : BLANCO, es ? BLANCO : AZUL);
+            b.setOnClickListener(x -> {
+                ajustes.setVoz(v.getName());
+                anunciador.aplicarVoz();
+                anunciador.probarVoz(v.getName());
+                pintarVoces();
+            });
+            voces.addView(b);
+        }
     }
 
     @Override
@@ -90,6 +122,20 @@ public class MainActivity extends Activity implements Registro.Oyente {
         raiz.addView(titulo);
         raiz.addView(texto("Dice en voz alta quién te escribe o te llama, para saber cuándo contestar.", 15, GRIS, false));
 
+        // ---- Botón grande para silenciar / activar ----
+        botonSilencio = boton("", ROJO, BLANCO);
+        botonSilencio.setTextSize(20);
+        botonSilencio.setMinHeight(dp(68));
+        botonSilencio.setOnClickListener(v -> {
+            boolean activar = !ajustes.activo();
+            ajustes.setActivo(activar);
+            if (activar) ajustes.setPausaHasta(0);
+            anunciador.alCambiarSilencio(activar);
+            pintarEstado();
+        });
+        raiz.addView(botonSilencio);
+        raiz.addView(texto("También puedes silenciarlo desde el panel rápido (desliza la barra de arriba con dos dedos → lápiz ✏️ → arrastra «Avisador de voz»).", 13, GRIS, false));
+
         // ---- Estado y permisos ----
         LinearLayout tarjetaEstado = tarjeta(raiz);
         estado = texto("", 16, AZUL, true);
@@ -106,7 +152,6 @@ public class MainActivity extends Activity implements Registro.Oyente {
         LinearLayout tarjetaAjustes = tarjeta(raiz);
         tarjetaAjustes.addView(texto("Ajustes", 18, AZUL, true));
 
-        tarjetaAjustes.addView(interruptor("Avisos activados", ajustes.activo(), v -> ajustes.setActivo(v)));
 
         TextView etiquetaVol = texto("Volumen de la voz: " + ajustes.volumen() + "%", 15, GRIS, false);
         tarjetaAjustes.addView(etiquetaVol);
@@ -150,6 +195,22 @@ public class MainActivity extends Activity implements Registro.Oyente {
             pintarEstado();
         });
         tarjetaAjustes.addView(botonPausa);
+
+        // ---- Voz ----
+        LinearLayout tarjetaVoz = tarjeta(raiz);
+        tarjetaVoz.addView(texto("Voz", 18, AZUL, true));
+        tarjetaVoz.addView(texto("Toca una voz para escucharla y elegirla. Las marcadas «hombre» suelen ser voces masculinas.", 14, GRIS, false));
+        voces = new LinearLayout(this);
+        voces.setOrientation(LinearLayout.VERTICAL);
+        tarjetaVoz.addView(voces);
+        tarjetaVoz.addView(interruptor("Voz más grave", ajustes.tonoVoz() < 0.95f, v -> {
+            ajustes.setTonoVoz(v ? 0.85f : 1.0f);
+            anunciador.probar();
+        }));
+        tarjetaVoz.addView(interruptor("Hablar más despacio", ajustes.velocidad() < 0.9f, v -> {
+            ajustes.setVelocidad(v ? 0.8f : 0.95f);
+            anunciador.probar();
+        }));
 
         // ---- Lista ----
         LinearLayout tarjetaLista = tarjeta(raiz);
@@ -210,6 +271,11 @@ public class MainActivity extends Activity implements Registro.Oyente {
         if (permiso && !anunciador.conectado()) {
             pasos.addView(texto("Conectando con las notificaciones… si en un minuto no dice «Escuchando», apaga y vuelve a encender el permiso.", 14, GRIS, false));
         }
+        botonSilencio.setText(ajustes.activo() ? "🔇  Silenciar la voz" : "🔊  Activar la voz");
+        GradientDrawable fs = new GradientDrawable();
+        fs.setColor(ajustes.activo() ? ROJO : VERDE);
+        fs.setCornerRadius(dp(14));
+        botonSilencio.setBackground(fs);
         botonPausa.setText(System.currentTimeMillis() < ajustes.pausaHasta() ? "▶ Reanudar ahora" : "⏸ Pausar 1 hora (reunión, misa…)");
     }
 

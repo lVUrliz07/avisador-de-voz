@@ -5,7 +5,7 @@ App de Android, **software libre (MIT)**, que dice en voz alta **quién te escri
 - «**Cliente Juan Pérez te escribe.**»
 - «**Cliente Juan Pérez te escribió 3 mensajes por Messenger.**»
 - «**Familia: Mamá te escribe.**»
-- «**Número nuevo 9 8 7, 6 5 4, 3 2 1 te escribe. Puede ser un cliente.**» (si no tiene nombre en la agenda, dice el número cifra por cifra)
+- «**Número nuevo 9 8 7, 6 5 4, 3 2 1 te escribe.**» (si no tiene nombre en la agenda, dice el número cifra por cifra)
 - «**Llamada de cliente Juan Pérez.**» (se repite mientras suena)
 - «**Llamada perdida de cliente Juan Pérez.**»
 - «**Hay un mensaje sin contestar de cliente Juan Pérez, de hace 10 minutos.**» (y otra vez a los 30 y a los 60)
@@ -29,6 +29,17 @@ Escucha: WhatsApp, WhatsApp Business, Messenger (y Messenger Lite / Meta Busines
 4. Toca **«Probar voz»**. Si no suena en español: Ajustes del teléfono → Sistema → Idioma → **Salida de texto a voz** → elige el motor de Google y descarga **Español**.
 
 **Xiaomi / Redmi / POCO:** además, en Información de la app activa **«Inicio automático»** y en Ahorro de batería elige **«Sin restricciones»**. **Huawei:** Inicio de apps → Gestionar manualmente → activar todo. **Samsung:** Batería → «Sin restricciones».
+
+## Silenciar rápido
+
+- En la app: el botón grande **«Silenciar la voz»** / **«Activar la voz»**.
+- Sin abrir la app: en el **panel rápido** (donde están Wi-Fi y Linterna) agrega el botón **«Avisador de voz»**: desliza la barra de arriba con dos dedos → lápiz ✏️ → arrástralo.
+
+## Voz y lectura
+
+- Se puede elegir la voz (las marcadas «hombre» son masculinas), hacerla más grave o más despacio.
+- El nombre se dice **una sola vez**; si el mismo chat sigue escribiendo, dice **«El mismo contacto dice: …»**.
+- Antes de leer, el mensaje se limpia: sin emojis ni enlaces, abreviaturas corregidas («q», «xq», «mñn», «pls»), «holaaaa» → «hola», mayúsculas sin deletrear, «S/ 60» → «60 soles», «9am» → «9 de la mañana». Fotos y audios se anuncian como «Mandó una foto» / «Mandó un audio».
 
 ## 2. Marcar clientes y familia (una sola vez por persona)
 

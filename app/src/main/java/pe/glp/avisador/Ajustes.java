@@ -21,6 +21,17 @@ public final class Ajustes {
     public void setVolumen(int v) { p.edit().putInt("volumen", Math.max(10, Math.min(100, v))).apply(); }
 
     /** Leer también lo que dice el mensaje (solo clientes y números nuevos). */
+    /** Nombre de la voz elegida (vacío = elegir automáticamente una de hombre). */
+    public String voz() { return p.getString("voz", ""); }
+    public void setVoz(String v) { p.edit().putString("voz", v).apply(); }
+
+    /** Tono de la voz: 1.0 normal, menos = más grave. */
+    public float tonoVoz() { return p.getFloat("tonoVoz", 0.85f); }
+    public void setTonoVoz(float v) { p.edit().putFloat("tonoVoz", v).apply(); }
+
+    public float velocidad() { return p.getFloat("velocidad", 0.95f); }
+    public void setVelocidad(float v) { p.edit().putFloat("velocidad", v).apply(); }
+
     public boolean leerTexto() { return p.getBoolean("leerTexto", false); }
     public void setLeerTexto(boolean v) { p.edit().putBoolean("leerTexto", v).apply(); }
 
